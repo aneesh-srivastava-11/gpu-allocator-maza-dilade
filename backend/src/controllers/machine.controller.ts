@@ -9,6 +9,8 @@ const registerSchema = z.object({
   token: z.string().min(1),
   hardware_id: z.string().min(1),
   os: z.enum(['windows', 'linux']).default('windows'),
+  model: z.string().optional(),
+  gpu_model: z.string().optional(),
 });
 
 const generateScriptSchema = z.object({
@@ -22,7 +24,8 @@ export const machineRouter = Router();
 machineRouter.post('/machines/register', validate(registerSchema), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { token, hardware_id, os } = req.body;
-    const result = await MachineService.registerAgent(token, hardware_id, os);
+    const modelName = req.body.model || req.body.gpu_model;
+    const result = await MachineService.registerAgent(token, hardware_id, os, modelName);
     return res.json(result);
   } catch (err) {
     next(err);

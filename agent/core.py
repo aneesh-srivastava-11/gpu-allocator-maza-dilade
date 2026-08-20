@@ -31,11 +31,13 @@ class AgentDaemon:
         print(f"[AGENT] Daemon started on {platform.system()} (Hardware ID: {self.hardware_id}, Target: {self.server_url})...")
         while True:
             try:
+                gpu_spec = self.collector.get_gpu_spec()
                 gpu_util = self.collector.get_gpu_utilization()
                 procs = self.collector.get_process_signature()
                 conns = self.collector.get_network_connections()
 
                 payload = {
+                    "gpu_model": gpu_spec,
                     "gpu_util_pct": gpu_util,
                     "process_signature": procs,
                     "network_connections": conns

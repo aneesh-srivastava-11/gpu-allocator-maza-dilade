@@ -3,23 +3,24 @@ import { LabRepository } from '../repositories/lab.repository';
 import { generatePowerShellScript, generateBashScript } from '../utils/installer-gen';
 import { hashPassword } from '../utils/hashing';
 import { MachineOS } from '@prisma/client';
+import { prisma } from '../db';
 import crypto from 'crypto';
 
 export class MachineService {
-  public static async registerAgent(token: string, hardwareId: string, os: string) {
+  public static async registerAgent(token: string, hardwareId: string, os: string, gpuModel?: string) {
     const existing = await MachineRepository.findByHardwareId(hardwareId);
     const machineOs = os === 'linux' ? MachineOS.linux : MachineOS.windows;
     const rawAgentToken = `agent_tok_${crypto.randomBytes(16).toString('hex')}`;
     const tokenHash = await hashPassword(rawAgentToken);
 
     if (existing) {
-      // Re-baseline / re-register existing machine
-      await MachineRepository.create({
-        labId: existing.labId,
-        name: existing.name,
-        os: machineOs,
-        hardwareId,
-        agentTokenHash: tokenHash,
+      await prisma.machine.update({
+        where: { id: existing.id },
+        data: {
+          os: machineOs,
+          agentTokenHash: tokenHash,
+          ...(gpuModel ? { model: gpuModel } : {}),
+        },
       });
     }
 

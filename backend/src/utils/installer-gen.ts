@@ -28,11 +28,16 @@ if (-not (Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 }
 
-Write-Host "[GPU-ALLOCATOR] Registering Machine with Backend (Hardware ID: $HardwareId)..." -ForegroundColor Cyan
+Write-Host "[GPU-ALLOCATOR] Auto-Detecting Physical GPU Hardware Spec..." -ForegroundColor Cyan
+$GpuName = (Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name | Select-Object -First 1)
+if (-not $GpuName) { $GpuName = "Auto-Detected Workstation GPU" }
+
+Write-Host "[GPU-ALLOCATOR] Registering Machine with Backend (Hardware ID: $HardwareId, GPU: $GpuName)..." -ForegroundColor Cyan
 $Body = @{
     token = $Token
     hardware_id = $HardwareId
     os = "windows"
+    gpu_model = $GpuName
 } | ConvertTo-Json
 
 try {
@@ -98,10 +103,16 @@ fi
 echo -e "\\e[36m[GPU-ALLOCATOR] Creating Service Directory at $INSTALL_DIR...\\e[0m"
 mkdir -p "$INSTALL_DIR"
 
-echo -e "\\e[36m[GPU-ALLOCATOR] Registering Machine with Backend (Hardware ID: $HARDWARE_ID)...\\e[0m"
+echo -e "\\e[36m[GPU-ALLOCATOR] Auto-Detecting Physical GPU Hardware Spec...\\e[0m"
+GPU_NAME=$(lspci 2>/dev/null | grep -i 'vga\|3d\|display' | head -n 1 | cut -d ':' -f3 | sed 's/^[ \t]*//')
+if [ -z "$GPU_NAME" ]; then
+    GPU_NAME="Auto-Detected Workstation GPU"
+fi
+
+echo -e "\\e[36m[GPU-ALLOCATOR] Registering Machine with Backend (Hardware ID: $HARDWARE_ID, GPU: $GPU_NAME)...\\e[0m"
 RESPONSE=$(curl -s -X POST "$SERVER_URL/machines/register" \\
   -H "Content-Type: application/json" \\
-  -d "{\\"token\\":\\"$TOKEN\\", \\"hardware_id\\":\\"$HARDWARE_ID\\", \\"os\\":\\"linux\\"}")
+  -d "{\\"token\\":\\"$TOKEN\\", \\"hardware_id\\":\\"$HARDWARE_ID\\", \\"os\\":\\"linux\\", \\"gpu_model\\":\\"$GPU_NAME\\"}")
 
 echo -e "\\e[32m[GPU-ALLOCATOR] Machine Registered!\\e[0m"
 

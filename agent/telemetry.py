@@ -1,4 +1,6 @@
 import os
+import platform
+import subprocess
 import psutil
 
 try:
@@ -15,7 +17,39 @@ class TelemetryCollector:
             except Exception:
                 pass
 
-    def get_gpu_utilization() -> float:
+    def get_gpu_spec(self) -> str:
+        if HAS_NVML:
+            try:
+                device_count = pynvml.nvmlDeviceGetCount()
+                if device_count > 0:
+                    handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+                    name = pynvml.nvmlDeviceGetName(handle)
+                    if isinstance(name, bytes):
+                        name = name.decode('utf-8')
+                    memory = pynvml.nvmlDeviceGetMemoryInfo(handle)
+                    vram_gb = round(memory.total / (1024 ** 3))
+                    return f"{name} {vram_gb}GB"
+            except Exception:
+                pass
+        
+        # OS Native Fallbacks
+        try:
+            if platform.system().lower() == "windows":
+                out = subprocess.check_output("wmic path win32_VideoController get name", shell=True).decode()
+                lines = [line.strip() for line in out.splitlines() if line.strip() and "Name" not in line]
+                if lines:
+                    return lines[0]
+            else:
+                out = subprocess.check_output("lspci | grep -i 'vga\\|3d\\|display'", shell=True).decode()
+                lines = [line.strip() for line in out.splitlines() if line.strip()]
+                if lines:
+                    return lines[0].split(':')[-1].strip()
+        except Exception:
+            pass
+
+        return "NVIDIA Workstation GPU (Auto-Detected)"
+
+    def get_gpu_utilization(self) -> float:
         if HAS_NVML:
             try:
                 device_count = pynvml.nvmlDeviceGetCount()
