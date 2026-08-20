@@ -49,15 +49,19 @@ app.get('/', (req, res) => {
   });
 });
 
-// Register Routers
-app.use(authRouter);
-app.use(accountRouter);
-app.use(labRouter);
-app.use(machineRouter);
-app.use(requestRouter);
-app.use(sessionRouter);
-app.use(telemetryRouter);
-app.use(auditRouter);
+// Register Routers (Mounted under both /api and / for seamless compatibility)
+const apiRouter = express.Router();
+apiRouter.use(authRouter);
+apiRouter.use(accountRouter);
+apiRouter.use(labRouter);
+apiRouter.use(machineRouter);
+apiRouter.use(requestRouter);
+apiRouter.use(sessionRouter);
+apiRouter.use(telemetryRouter);
+apiRouter.use(auditRouter);
+
+app.use('/api', apiRouter);
+app.use('/', apiRouter);
 
 // Global Error Handler
 app.use(errorHandler);
