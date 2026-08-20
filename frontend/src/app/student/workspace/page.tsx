@@ -68,6 +68,44 @@ export default function StudentWorkspacePage() {
     }
   };
 
+  const [extensionMinutes, setExtensionMinutes] = useState<number>(60);
+  const [extensionReason, setExtensionReason] = useState<string>("");
+  const [extendingSessionId, setExtendingSessionId] = useState<number | null>(null);
+  const [extensionSuccessMsg, setExtensionSuccessMsg] = useState<string>("");
+  const [extensionErrorMsg, setExtensionErrorMsg] = useState<string>("");
+
+  const handleRequestExtension = async (sessionId: number) => {
+    setExtensionErrorMsg("");
+    setExtensionSuccessMsg("");
+    setExtendingSessionId(sessionId);
+    try {
+      const res = await fetch(`${API_BASE}/sessions/${sessionId}/extend`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          extensionMinutes,
+          reason: extensionReason || "Requested session duration extension",
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || errData.message || "Failed to extend session");
+      }
+
+      const data = await res.json();
+      setExtensionSuccessMsg(data.message || "Session extended successfully!");
+      fetchMyRequests();
+    } catch (err: any) {
+      setExtensionErrorMsg(err.message || "Extension request failed");
+    } finally {
+      setExtendingSessionId(null);
+    }
+  };
+
   const activeOrApprovedRequests = requests.filter(
     (r) => r.status === "approved" || r.status === "active"
   );
@@ -101,6 +139,9 @@ export default function StudentWorkspacePage() {
             <div className="space-y-6 max-w-2xl mx-auto">
               {activeOrApprovedRequests.map((req) => {
                 const session = req.session;
+                const elapsedPct = req.elapsed_pct || 0;
+                const is80Pct = req.is_80_pct_reached || elapsedPct >= 80;
+
                 return (
                   <div
                     key={req.id}
@@ -122,6 +163,94 @@ export default function StudentWorkspacePage() {
                         {req.status === "approved" ? "Awaiting Code Entry" : "Workspace Active"}
                       </span>
                     </div>
+
+                    {/* Session Elapsed Time Progress Indicator */}
+                    <div className="p-4 rounded-xl bg-[#0B1220] border border-slate-800 space-y-2">
+                      <div className="flex justify-between text-xs font-medium">
+                        <span className="text-slate-400">Allocated Time Consumed</span>
+                        <span className={`font-bold ${is80Pct ? "text-amber-400" : "text-emerald-400"}`}>
+                          {elapsedPct}% Elapsed
+                        </span>
+                      </div>
+                      <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full transition-all duration-500 ${
+                            is80Pct
+                              ? "bg-gradient-to-r from-amber-500 to-orange-500"
+                              : "bg-gradient-to-r from-emerald-500 to-cyan-500"
+                          }`}
+                          style={{ width: `${Math.min(100, elapsedPct)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* 80%+ Time Elapsed Extension Banner */}
+                    {session && (is80Pct || req.session?.can_request_extension) && (
+                      <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-4">
+                        <div className="flex items-start gap-3">
+                          <AlertCircle className="text-amber-400 shrink-0 mt-0.5" size={20} />
+                          <div>
+                            <h4 className="text-sm font-bold text-amber-300">
+                              ⏰ 80% Time Completed — Extension Eligible
+                            </h4>
+                            <p className="text-xs text-slate-300 mt-0.5">
+                              You have reached 80%+ of your allocated session window. You can request a session time extension below before your workspace expires.
+                            </p>
+                          </div>
+                        </div>
+
+                        {extensionSuccessMsg && (
+                          <div className="p-3 rounded-xl bg-emerald-500/20 text-emerald-300 text-xs font-semibold">
+                            {extensionSuccessMsg}
+                          </div>
+                        )}
+                        {extensionErrorMsg && (
+                          <div className="p-3 rounded-xl bg-rose-500/20 text-rose-300 text-xs font-semibold">
+                            {extensionErrorMsg}
+                          </div>
+                        )}
+
+                        <div className="space-y-3 pt-2 border-t border-amber-500/20">
+                          <div className="grid grid-cols-3 gap-2">
+                            {[30, 60, 120].map((mins) => (
+                              <button
+                                key={mins}
+                                type="button"
+                                onClick={() => setExtensionMinutes(mins)}
+                                className={`py-2 rounded-xl text-xs font-bold border transition-all ${
+                                  extensionMinutes === mins
+                                    ? "bg-[#F97316] text-white border-orange-400 shadow-md shadow-orange-500/20"
+                                    : "bg-[#0B1220] text-slate-400 border-slate-700 hover:text-white"
+                                }`}
+                              >
+                                +{mins >= 60 ? `${mins / 60} Hr${mins > 60 ? "s" : ""}` : `${mins} Mins`}
+                              </button>
+                            ))}
+                          </div>
+
+                          <input
+                            type="text"
+                            value={extensionReason}
+                            onChange={(e) => setExtensionReason(e.target.value)}
+                            placeholder="Optional extension reason (e.g. Model epoch 45/50 in progress)..."
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-[#0B1220] border border-slate-700 text-white text-xs focus:outline-none focus:border-[#F97316]"
+                          />
+
+                          <button
+                            type="button"
+                            disabled={extendingSessionId === session.id}
+                            onClick={() => handleRequestExtension(session.id)}
+                            className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                          >
+                            {extendingSessionId === session.id ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-950" />
+                            ) : (
+                              <span>Request Session Extension (+{extensionMinutes} Mins)</span>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     {launchResult && session && launchResult.session_id === session.id ? (
                       <div className="p-6 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 space-y-3 text-center">

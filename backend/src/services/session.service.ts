@@ -5,6 +5,7 @@ import { hashCode, verifyCode } from '../utils/hashing';
 import { SessionStatus, MachineStatus, RequestStatus } from '@prisma/client';
 import { AuditRepository } from '../repositories/audit.repository';
 import { wsManager } from '../ws/manager';
+import { prisma } from '../db';
 
 export class SessionService {
   public static async createSessionOnApproval(requestId: number) {
@@ -64,6 +65,14 @@ export class SessionService {
     const session = await SessionRepository.findById(sessionId);
     if (!session) throw { statusCode: 404, message: 'Session not found' };
 
+    const now = new Date().getTime();
+    const startTime = new Date(session.request.startTime).getTime();
+    const endTime = new Date(session.request.endTime).getTime();
+    const totalDuration = endTime - startTime;
+    const elapsed = Math.max(0, now - startTime);
+    const elapsedPct = totalDuration > 0 ? Math.min(100, Math.round((elapsed / totalDuration) * 100)) : 0;
+    const is80PctReached = elapsedPct >= 80;
+
     return {
       id: session.id,
       request_id: session.requestId,
@@ -74,6 +83,11 @@ export class SessionService {
       gpu_name: session.request.machine.name,
       lab_name: session.request.machine.lab.name,
       reason: session.request.reason,
+      start_time: session.request.startTime,
+      end_time: session.request.endTime,
+      elapsed_pct: elapsedPct,
+      is_80_pct_reached: is80PctReached,
+      can_request_extension: is80PctReached && ['awaiting_code', 'active'].includes(session.status),
       started_at: session.startedAt,
       flagged_at: session.flaggedAt,
       blocked_at: session.blockedAt,
@@ -92,6 +106,52 @@ export class SessionService {
         evidence: f.evidence,
         created_at: f.createdAt,
       })),
+    };
+  }
+
+  public static async extendSession(sessionId: number, extensionMinutes: number, reason: string | undefined, actorId: number) {
+    const session = await SessionRepository.findById(sessionId);
+    if (!session) throw { statusCode: 404, message: 'Session not found' };
+
+    const req = session.request;
+    const now = new Date();
+    const startTime = new Date(req.startTime).getTime();
+    const endTime = new Date(req.endTime).getTime();
+    const totalDuration = endTime - startTime;
+    const elapsed = Math.max(0, now.getTime() - startTime);
+    const elapsedPct = totalDuration > 0 ? (elapsed / totalDuration) * 100 : 0;
+
+    const user = await prisma.user.findUnique({ where: { id: actorId } });
+    const isElevated = user?.role === 'incharge' || user?.role === 'superuser';
+
+    if (!isElevated && elapsedPct < 80) {
+      const minMinsRemaining = Math.ceil(((0.8 * totalDuration) - elapsed) / (60 * 1000));
+      throw {
+        statusCode: 400,
+        message: `Extension request permitted only after 80% of session time has elapsed. Please try again in ~${Math.max(1, minMinsRemaining)} minutes.`,
+      };
+    }
+
+    const newEndTime = new Date(endTime + extensionMinutes * 60 * 1000);
+    await RequestRepository.updateTime(req.id, req.startTime, newEndTime);
+
+    await AuditRepository.log(actorId, 'EXTEND', 'SESSION', sessionId, {
+      extension_minutes: extensionMinutes,
+      reason: reason || '80% session time elapsed extension',
+      new_end_time: newEndTime,
+    });
+
+    wsManager.broadcast('SESSION_EXTENDED', {
+      session_id: sessionId,
+      machine_id: req.machineId,
+      new_end_time: newEndTime,
+      extended_by: actorId,
+    });
+
+    return {
+      message: `Session extended successfully by +${extensionMinutes} minutes!`,
+      session_id: sessionId,
+      new_end_time: newEndTime,
     };
   }
 

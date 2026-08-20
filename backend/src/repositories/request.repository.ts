@@ -46,6 +46,13 @@ export class RequestRepository {
     });
   }
 
+  public static async updateTime(id: number, startTime: Date, endTime: Date): Promise<Request> {
+    return prisma.request.update({
+      where: { id },
+      data: { startTime, endTime },
+    });
+  }
+
   public static async countActiveForStudent(studentId: number): Promise<number> {
     return prisma.request.count({
       where: {

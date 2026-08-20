@@ -9,7 +9,32 @@ const verifyCodeSchema = z.object({
   code: z.string().min(1),
 });
 
+const extendSchema = z.object({
+  extensionMinutes: z.number().int().positive().default(60),
+  reason: z.string().optional(),
+});
+
 export const sessionRouter = Router();
+
+sessionRouter.post(
+  '/sessions/:id/extend',
+  attachUser,
+  validate(extendSchema),
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const sessionId = parseInt(req.params.id, 10);
+      const result = await SessionService.extendSession(
+        sessionId,
+        req.body.extensionMinutes,
+        req.body.reason,
+        req.user!.id
+      );
+      return res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 sessionRouter.post(
   '/sessions/:id/verify-code',

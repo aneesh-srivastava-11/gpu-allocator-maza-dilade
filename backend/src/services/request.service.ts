@@ -81,26 +81,40 @@ export class RequestService {
 
   public static async getMyRequests(studentId: number) {
     const requests = await RequestRepository.findByStudentId(studentId);
-    return requests.map(r => ({
-      id: r.id,
-      gpu_id: r.machineId,
-      gpu_name: r.machine?.name,
-      gpu_model: r.machine?.model,
-      lab_name: r.machine?.lab?.name,
-      reason: r.reason,
-      start_time: r.startTime,
-      end_time: r.endTime,
-      status: r.status,
-      queue_position: r.queuePosition,
-      created_at: r.createdAt,
-      session: r.session ? {
-        id: r.session.id,
-        status: r.session.status,
-        started_at: r.session.startedAt,
-        flagged_at: r.session.flaggedAt,
-        blocked_at: r.session.blockedAt,
-      } : null,
-    }));
+    const now = new Date().getTime();
+
+    return requests.map(r => {
+      const startTime = new Date(r.startTime).getTime();
+      const endTime = new Date(r.endTime).getTime();
+      const totalDuration = endTime - startTime;
+      const elapsed = Math.max(0, now - startTime);
+      const elapsedPct = totalDuration > 0 ? Math.min(100, Math.round((elapsed / totalDuration) * 100)) : 0;
+      const is80PctReached = elapsedPct >= 80;
+
+      return {
+        id: r.id,
+        gpu_id: r.machineId,
+        gpu_name: r.machine?.name,
+        gpu_model: r.machine?.model,
+        lab_name: r.machine?.lab?.name,
+        reason: r.reason,
+        start_time: r.startTime,
+        end_time: r.endTime,
+        status: r.status,
+        elapsed_pct: elapsedPct,
+        is_80_pct_reached: is80PctReached,
+        queue_position: r.queuePosition,
+        created_at: r.createdAt,
+        session: r.session ? {
+          id: r.session.id,
+          status: r.session.status,
+          started_at: r.session.startedAt,
+          flagged_at: r.session.flaggedAt,
+          blocked_at: r.session.blockedAt,
+          can_request_extension: is80PctReached && ['awaiting_code', 'active'].includes(r.session.status),
+        } : null,
+      };
+    });
   }
 
   public static async getPendingRequests(currentUser: any) {
