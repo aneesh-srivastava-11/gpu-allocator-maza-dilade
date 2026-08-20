@@ -15,6 +15,11 @@ uploads/*
 !uploads/.gitkeep
 postgres_data/
 
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
 # OS / Editor junk
 .DS_Store
 Thumbs.db
