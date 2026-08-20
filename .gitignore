@@ -1,0 +1,22 @@
+# Dependencies & Builds
+node_modules/
+.next/
+dist/
+build/
+*.traineddata
+
+# Environment & Secrets
+.env
+.env.local
+*.log
+
+# Database & Uploads
+uploads/*
+!uploads/.gitkeep
+postgres_data/
+
+# OS / Editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

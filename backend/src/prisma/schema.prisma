@@ -1,0 +1,186 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  superuser
+  incharge
+  student
+}
+
+enum AccountStatus {
+  pending_review
+  active
+  rejected
+}
+
+enum MachineOS {
+  windows
+  linux
+}
+
+enum MachineStatus {
+  idle
+  allocated
+  blocked
+  offline
+}
+
+enum RequestStatus {
+  queued
+  pending_approval
+  approved
+  rejected
+  active
+  completed
+}
+
+enum SessionStatus {
+  awaiting_code
+  active
+  flagged
+  blocked
+  completed
+}
+
+enum FlagType {
+  mining
+  gaming
+  other
+}
+
+model User {
+  id                  Int           @id @default(autoincrement())
+  name                String
+  email               String        @unique
+  rollNumber          String?       @map("roll_number")
+  department          String?
+  role                Role          @default(student)
+  passwordHash        String        @map("password_hash")
+  idCardImageUrl      String?       @map("id_card_image_url")
+  idOcrExtractedName  String?       @map("id_ocr_extracted_name")
+  idNameMatch         Boolean?      @map("id_name_match")
+  accountStatus       AccountStatus @default(pending_review) @map("account_status")
+  managedLabIds       Int[]         @default([]) @map("managed_lab_ids")
+  createdAt           DateTime      @default(now()) @map("created_at")
+
+  requests   Request[]
+  auditLogs  AuditLog[]
+
+  @@map("users")
+}
+
+model Lab {
+  id       Int       @id @default(autoincrement())
+  name     String
+  location String
+
+  machines Machine[]
+
+  @@map("labs")
+}
+
+model Machine {
+  id             Int           @id @default(autoincrement())
+  labId          Int           @map("lab_id")
+  name           String
+  model          String        @default("NVIDIA RTX 4090 24GB")
+  os             MachineOS     @default(windows)
+  hardwareId     String        @unique @map("hardware_id")
+  agentTokenHash String?       @map("agent_token_hash")
+  status         MachineStatus @default(idle)
+  lastSeenAt     DateTime?     @map("last_seen_at")
+
+  lab      Lab       @relation(fields: [labId], references: [id])
+  requests Request[]
+
+  @@map("machines")
+}
+
+model Request {
+  id            Int           @id @default(autoincrement())
+  studentId     Int           @map("student_id")
+  machineId     Int           @map("machine_id")
+  reason        String
+  startTime     DateTime      @map("start_time")
+  endTime       DateTime      @map("end_time")
+  status        RequestStatus @default(pending_approval)
+  queuePosition Int           @default(0) @map("queue_position")
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  student User     @relation(fields: [studentId], references: [id])
+  machine Machine  @relation(fields: [machineId], references: [id])
+  session Session?
+
+  @@map("requests")
+}
+
+model Session {
+  id              Int           @id @default(autoincrement())
+  requestId       Int           @unique @map("request_id")
+  startedAt       DateTime      @default(now()) @map("started_at")
+  flaggedAt       DateTime?     @map("flagged_at")
+  blockedAt       DateTime?     @map("blocked_at")
+  endedAt         DateTime?     @map("ended_at")
+  status          SessionStatus @default(awaiting_code)
+  oneTimeCodeHash String?       @map("one_time_code_hash")
+  codeGeneratedAt DateTime?     @map("code_generated_at")
+  codeAttempts    Int           @default(0) @map("code_attempts")
+  escalated       Boolean       @default(false)
+
+  request          Request           @relation(fields: [requestId], references: [id])
+  telemetryReports TelemetryReport[]
+  flags            Flag[]
+  auditLogs        AuditLog[]
+
+  @@map("sessions")
+}
+
+model TelemetryReport {
+  id                 Int      @id @default(autoincrement())
+  sessionId          Int      @map("session_id")
+  reportedAt         DateTime @default(now()) @map("reported_at")
+  gpuUtilPct         Float    @map("gpu_util_pct")
+  processSignature   Json     @map("process_signature")
+  networkConnections Json     @map("network_connections")
+
+  session Session @relation(fields: [sessionId], references: [id])
+  flags   Flag[]
+
+  @@map("telemetry_reports")
+}
+
+model Flag {
+  id                Int      @id @default(autoincrement())
+  sessionId         Int      @map("session_id")
+  telemetryReportId Int?     @map("telemetry_report_id")
+  type              FlagType
+  evidence          Json
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  session         Session          @relation(fields: [sessionId], references: [id])
+  telemetryReport TelemetryReport? @relation(fields: [telemetryReportId], references: [id])
+
+  @@map("flags")
+}
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  actorId    Int      @map("actor_id")
+  action     String
+  targetType String   @map("target_type")
+  targetId   Int?     @map("target_id")
+  metadata   Json?
+  sessionId  Int?     @map("session_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  actor   User     @relation(fields: [actorId], references: [id])
+  session Session? @relation(fields: [sessionId], references: [id])
+
+  @@map("audit_log")
+}

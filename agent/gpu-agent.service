@@ -1,0 +1,17 @@
+[Unit]
+Description=Department GPU Management System Telemetry & Governance Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/gpu-agent
+EnvironmentFile=-/etc/default/gpu-agent
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /opt/gpu-agent/core.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
