@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ShieldCheck, Clock, User, FileText, Activity } from "lucide-react";
+import { Sidebar } from "@/components/Sidebar";
+import { TopBar } from "@/components/TopBar";
+import { useAuth } from "@/context/AuthContext";
+import { ShieldCheck, Clock, User } from "lucide-react";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8010";
 
 interface AuditLog {
   id: number;
@@ -13,29 +18,30 @@ interface AuditLog {
 }
 
 export default function AdminAuditLogPage() {
+  const { token } = useAuth();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchLogs();
-  }, []);
-
   const fetchLogs = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:8010/audit/logs", {
-        headers: { Authorization: `Bearer ${token}` }
+      const authToken = token || localStorage.getItem("gpu_portal_token");
+      const res = await fetch(`${API_BASE}/audit/logs`, {
+        headers: { Authorization: `Bearer ${authToken}` },
       });
       if (res.ok) {
         const data = await res.json();
         setLogs(data);
       }
     } catch (err) {
-      console.error(err);
+      console.error("[FETCH AUDIT LOGS ERROR]", err);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchLogs();
+  }, [token]);
 
   const getActionBadge = (action: string) => {
     switch (action) {
@@ -55,61 +61,71 @@ export default function AdminAuditLogPage() {
   };
 
   return (
-    <div className="p-6 md:p-10 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-100 flex items-center gap-3">
-            <ShieldCheck className="text-[#F97316]" size={32} />
-            Governance Audit Log
-          </h1>
-          <p className="text-slate-400 mt-1">
-            Immutable audit record of all approvals, rejections, OTP unblocks, extensions, and terminations.
-          </p>
-        </div>
-      </div>
+    <div className="min-h-screen bg-slate-50 dark:bg-[#0F1524] text-slate-900 dark:text-white flex">
+      <Sidebar />
 
-      {loading ? (
-        <div className="flex justify-center p-12 text-slate-400">Loading audit records...</div>
-      ) : logs.length === 0 ? (
-        <div className="bg-[#1E293B] p-8 rounded-xl text-center border border-slate-800 text-slate-400">
-          No audit entries recorded yet.
+      <main className="flex-1 md:ml-64 flex flex-col min-h-screen">
+        <TopBar title="Governance Audit Log" subtitle="Immutable Department Audit Trail" />
+
+        <div className="p-6 md:p-10 max-w-7xl mx-auto w-full flex-1">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h1 className="text-3xl font-bold text-slate-100 flex items-center gap-3">
+                <ShieldCheck className="text-[#F97316]" size={32} />
+                Governance Audit Log
+              </h1>
+              <p className="text-slate-400 mt-1">
+                Immutable audit record of all approvals, rejections, OTP unblocks, extensions, and terminations.
+              </p>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="flex justify-center p-12 text-slate-400">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#F97316]" />
+            </div>
+          ) : logs.length === 0 ? (
+            <div className="bg-[#161D2E] p-8 rounded-xl text-center border border-slate-800 text-slate-400">
+              No audit entries recorded yet.
+            </div>
+          ) : (
+            <div className="bg-[#161D2E] border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+              <table className="w-full text-left text-sm text-slate-300">
+                <thead className="bg-[#0B1220] text-slate-400 uppercase text-xs border-b border-slate-800">
+                  <tr>
+                    <th className="px-6 py-4 font-semibold">Actor</th>
+                    <th className="px-6 py-4 font-semibold">Action</th>
+                    <th className="px-6 py-4 font-semibold">Session ID</th>
+                    <th className="px-6 py-4 font-semibold">Justification / Details</th>
+                    <th className="px-6 py-4 font-semibold">Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {logs.map((log) => (
+                    <tr key={log.id} className="hover:bg-slate-800/40 transition-colors">
+                      <td className="px-6 py-4 font-medium text-slate-200 flex items-center gap-2">
+                        <User size={16} className="text-[#F97316]" />
+                        {log.actor_name}
+                      </td>
+                      <td className="px-6 py-4">{getActionBadge(log.action_type)}</td>
+                      <td className="px-6 py-4 text-slate-400 font-mono">
+                        {log.session_id ? `#${log.session_id}` : "N/A"}
+                      </td>
+                      <td className="px-6 py-4 text-slate-300 max-w-md truncate">
+                        {log.justification_note || "No note attached"}
+                      </td>
+                      <td className="px-6 py-4 text-slate-400 text-xs flex items-center gap-1.5">
+                        <Clock size={14} />
+                        {new Date(log.created_at).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="bg-[#1E293B] border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-          <table className="w-full text-left text-sm text-slate-300">
-            <thead className="bg-[#0F172A] text-slate-400 uppercase text-xs border-b border-slate-800">
-              <tr>
-                <th className="px-6 py-4 font-semibold">Actor</th>
-                <th className="px-6 py-4 font-semibold">Action</th>
-                <th className="px-6 py-4 font-semibold">Session ID</th>
-                <th className="px-6 py-4 font-semibold">Justification / Details</th>
-                <th className="px-6 py-4 font-semibold">Timestamp</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {logs.map((log) => (
-                <tr key={log.id} className="hover:bg-slate-800/40 transition-colors">
-                  <td className="px-6 py-4 font-medium text-slate-200 flex items-center gap-2">
-                    <User size={16} className="text-[#F97316]" />
-                    {log.actor_name}
-                  </td>
-                  <td className="px-6 py-4">{getActionBadge(log.action_type)}</td>
-                  <td className="px-6 py-4 text-slate-400 font-mono">
-                    {log.session_id ? `#${log.session_id}` : "N/A"}
-                  </td>
-                  <td className="px-6 py-4 text-slate-300 max-w-md truncate">
-                    {log.justification_note || "No note attached"}
-                  </td>
-                  <td className="px-6 py-4 text-slate-400 text-xs flex items-center gap-1.5">
-                    <Clock size={14} />
-                    {new Date(log.created_at).toLocaleString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      </main>
     </div>
   );
 }
