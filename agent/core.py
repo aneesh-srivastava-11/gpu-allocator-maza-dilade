@@ -4,12 +4,22 @@ import time
 import argparse
 import requests
 import platform
-from telemetry import TelemetryCollector
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from telemetry import TelemetryCollector
+except ImportError:
+    from agent.telemetry import TelemetryCollector
 
 if platform.system().lower() == "windows":
-    from enforcement.windows import WindowsEnforcer as Enforcer
+    try:
+        from enforcement.windows import WindowsEnforcer as Enforcer
+    except ImportError:
+        from agent.enforcement.windows import WindowsEnforcer as Enforcer
 else:
-    from enforcement.linux import LinuxEnforcer as Enforcer
+    try:
+        from enforcement.linux import LinuxEnforcer as Enforcer
+    except ImportError:
+        from agent.enforcement.linux import LinuxEnforcer as Enforcer
 
 def parse_args():
     parser = argparse.ArgumentParser(description="GPU Workstation Management Agent")
@@ -50,10 +60,14 @@ class AgentDaemon:
                 if resp.status_code == 200:
                     self.consecutive_failures = 0
                     data = resp.json()
+                    action = data.get("action")
                     if data.get("status") == "flagged":
                         print(f"⚠️ [AGENT] Session FLAGGED by backend. Reason: {data.get('reason')}")
-                        self.enforcer.lock_session()
+                        self.enforcer.reset_baseline()
                         self.enforcer.block_network()
+                    elif action == "reset_baseline":
+                        print("🧹 [AGENT] Session ENDED. Executing baseline reset...")
+                        self.enforcer.reset_baseline()
                 else:
                     self.consecutive_failures += 1
 

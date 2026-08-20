@@ -49,7 +49,15 @@ try {
     Exit 1
 }
 
-# 2. Configure Windows Service (System Account)
+# 2. Configure Restricted Local Student User Account ('gpuuser')
+Write-Host "[GPU-ALLOCATOR] Configuring Restricted Local Student Account 'gpuuser'..." -ForegroundColor Cyan
+if (-not (Get-LocalUser -Name "gpuuser" -ErrorAction SilentlyContinue)) {
+    $Password = ConvertTo-SecureString "GpuStudent#2026!" -AsPlainText -Force
+    New-LocalUser -Name "gpuuser" -Password $Password -FullName "GPU Workspace Restricted User" -Description "Restricted account for GPU Allocator workspace sessions" | Out-Null
+    Add-LocalGroupMember -Group "Users" -Member "gpuuser" -ErrorAction SilentlyContinue
+}
+
+# 3. Configure Windows Service (System Account)
 Write-Host "[GPU-ALLOCATOR] Registering Windows Service 'GPUAgent' under NT AUTHORITY\\SYSTEM..." -ForegroundColor Cyan
 $ServiceName = "GPUAgent"
 
@@ -115,6 +123,13 @@ RESPONSE=$(curl -s -X POST "$SERVER_URL/machines/register" \\
   -d "{\\"token\\":\\"$TOKEN\\", \\"hardware_id\\":\\"$HARDWARE_ID\\", \\"os\\":\\"linux\\", \\"gpu_model\\":\\"$GPU_NAME\\"}")
 
 echo -e "\\e[32m[GPU-ALLOCATOR] Machine Registered!\\e[0m"
+
+# Configure Restricted Local Student Account ('gpuuser')
+echo -e "\\e[36m[GPU-ALLOCATOR] Configuring Restricted Local Student Account 'gpuuser'...\\e[0m"
+if ! id "gpuuser" &>/dev/null; then
+    useradd -m -s /bin/bash -c "GPU Workspace Restricted User" gpuuser 2>/dev/null || true
+    echo "gpuuser:GpuStudent#2026!" | chpasswd 2>/dev/null || true
+fi
 
 # Install Systemd Service Unit File
 echo -e "\\e[36m[GPU-ALLOCATOR] Installing Systemd Service 'gpu-agent.service'...\\e[0m"

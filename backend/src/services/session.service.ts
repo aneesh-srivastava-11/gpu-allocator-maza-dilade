@@ -176,6 +176,12 @@ export class SessionService {
       machine_id: session.request.machineId,
     });
 
+    wsManager.broadcast('RESET_BASELINE', {
+      session_id: sessionId,
+      machine_id: session.request.machineId,
+      action: 'reset_baseline',
+    });
+
     const { RequestService } = require('./request.service');
     await RequestService.promoteNextQueued(session.request.machineId);
 

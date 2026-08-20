@@ -16,3 +16,7 @@ class BaseEnforcer(abc.ABC):
     @abc.abstractmethod
     def unblock_network(self):
         pass
+
+    @abc.abstractmethod
+    def reset_baseline(self):
+        pass

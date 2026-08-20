@@ -26,3 +26,19 @@ class LinuxEnforcer(BaseEnforcer):
             print("[LINUX ENFORCER] Outbound network unblocked.")
         except Exception as e:
             print(f"[LINUX ENFORCER] Network unblock failed: {e}")
+
+    def reset_baseline(self):
+        print("[LINUX ENFORCER] Executing Workstation Baseline Reset...")
+        try:
+            subprocess.run(["pkill", "-u", "gpuuser"], check=False)
+            print("[LINUX ENFORCER] Restricted user processes terminated.")
+        except Exception as e:
+            print(f"[LINUX ENFORCER] Process purge warning: {e}")
+
+        try:
+            subprocess.run(["rm", "-rf", "/tmp/gpu_*", "/home/gpuuser/.cache"], check=False)
+            print("[LINUX ENFORCER] Temporary workspace files purged.")
+        except Exception as e:
+            print(f"[LINUX ENFORCER] Temp purge warning: {e}")
+
+        self.lock_session()

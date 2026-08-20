@@ -26,3 +26,21 @@ class WindowsEnforcer(BaseEnforcer):
             print("[WINDOWS ENFORCER] Outbound network restored.")
         except Exception as e:
             print(f"[WINDOWS ENFORCER] Network unblock failed: {e}")
+
+    def reset_baseline(self):
+        print("[WINDOWS ENFORCER] Executing Workstation Baseline Reset...")
+        try:
+            subprocess.run(["taskkill", "/F", "/FI", "USERNAME eq gpuuser"], check=False)
+            print("[WINDOWS ENFORCER] Restricted user processes terminated.")
+        except Exception as e:
+            print(f"[WINDOWS ENFORCER] Process purge warning: {e}")
+
+        try:
+            temp_dir = os.path.expandvars("%SystemDrive%\\Users\\gpuuser\\AppData\\Local\\Temp")
+            if os.path.exists(temp_dir):
+                subprocess.run(f'powershell.exe -Command "Remove-Item -Path \'{temp_dir}\\*\' -Recurse -Force -ErrorAction SilentlyContinue"', shell=True)
+            print("[WINDOWS ENFORCER] Temporary workspace files purged.")
+        except Exception as e:
+            print(f"[WINDOWS ENFORCER] Temp purge warning: {e}")
+
+        self.lock_session()
