@@ -12,7 +12,8 @@ export class StorageService {
     // 1. Try Supabase Storage if configured
     if (this.supabase) {
       try {
-        const filePath = `id-cards/${Date.now()}_${fileName}`;
+        const safeFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const filePath = `id-cards/${Date.now()}_${safeFileName}`;
         const { data, error } = await this.supabase.storage
           .from('department-ids')
           .upload(filePath, fileBuffer, {
@@ -20,18 +21,28 @@ export class StorageService {
             upsert: true,
           });
 
-        if (!error && data) {
+        if (error) {
+          console.error('[STORAGE ERROR] Supabase storage upload failed:', error.message);
+          if (config.nodeEnv === 'production') {
+            throw new Error(`Supabase S3 storage upload failed: ${error.message}`);
+          }
+        } else if (data) {
           const { data: publicData } = this.supabase.storage
             .from('department-ids')
             .getPublicUrl(filePath);
           return publicData.publicUrl;
         }
-      } catch (err) {
-        console.warn('[STORAGE] Supabase upload fallback to local storage:', err);
+      } catch (err: any) {
+        console.error('[STORAGE EXCEPTION] Supabase upload failed:', err);
+        if (config.nodeEnv === 'production') {
+          throw err;
+        }
       }
+    } else if (config.nodeEnv === 'production') {
+      throw new Error('Supabase Storage configuration missing in production environment (SUPABASE_URL & SUPABASE_SERVICE_ROLE_KEY required).');
     }
 
-    // 2. Fallback to local storage (production ready local volume)
+    // 2. Fallback to local storage (Development mode fallback)
     const uploadsDir = path.join(process.cwd(), 'uploads');
     if (!fs.existsSync(uploadsDir)) {
       fs.mkdirSync(uploadsDir, { recursive: true });

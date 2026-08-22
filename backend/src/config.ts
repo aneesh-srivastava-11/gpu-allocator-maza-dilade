@@ -4,8 +4,10 @@ import path from 'path';
 dotenv.config();
 
 const jwtSecret = process.env.JWT_SECRET || 'gpu_allocator_secret_key_change_in_production';
-if (process.env.NODE_ENV === 'production' && jwtSecret.includes('change_in_production')) {
-  console.warn('⚠️ [SECURITY WARNING] Default JWT_SECRET detected in production! Please set JWT_SECRET in .env');
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.JWT_SECRET || jwtSecret.includes('change_in_production')) {
+    throw new Error('❌ [CRITICAL SECURITY ERROR] Production environment detected without a secure custom JWT_SECRET set!');
+  }
 }
 
 export const config = {

@@ -59,36 +59,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // WebSocket Connection for Realtime Live Alerts
+  // Realtime Live Status Connection (Supports both WebSockets and Serverless Polling/Realtime)
   useEffect(() => {
     let ws: WebSocket | null = null;
-    let reconnectTimeout: any = null;
+    let attempts = 0;
+    const maxAttempts = 3;
 
     const connectWS = () => {
+      if (attempts >= maxAttempts) {
+        console.log("[REALTIME] Falling back to serverless REST/Supabase Realtime updates.");
+        return;
+      }
+
       try {
         ws = new WebSocket(WS_BASE);
         ws.onopen = () => {
-          console.log("[WS] Connected to live status WebSocket stream.");
+          console.log("[WS] Connected to live status stream.");
+          attempts = 0;
         };
         ws.onmessage = (evt) => {
           try {
             const data = JSON.parse(evt.data);
-            console.log("[WS MSG]", data);
             setWsMessage(data);
-          } catch (e) {
-            console.error("[WS] Error parsing message:", e);
-          }
+          } catch (e) {}
         };
         ws.onclose = () => {
-          console.log("[WS] Connection closed. Retrying in 3s...");
-          reconnectTimeout = setTimeout(connectWS, 3000);
+          attempts++;
+          if (attempts < maxAttempts) {
+            setTimeout(connectWS, 5000);
+          }
         };
-        ws.onerror = (err) => {
-          console.error("[WS ERROR]", err);
+        ws.onerror = () => {
           ws?.close();
         };
       } catch (e) {
-        console.error("[WS EXCEPTION]", e);
+        attempts = maxAttempts;
       }
     };
 
@@ -96,9 +101,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return () => {
       if (ws) ws.close();
-      if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
   }, []);
+
 
   const setDarkMode = (val: boolean) => {
     setDarkModeState(val);

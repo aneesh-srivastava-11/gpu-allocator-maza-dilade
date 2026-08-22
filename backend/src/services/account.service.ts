@@ -1,10 +1,10 @@
 import { UserRepository } from '../repositories/user.repository';
 import { StorageService } from './storage.service';
 import { OcrService } from './ocr.service';
-import { hashPassword } from '../utils/hashing';
 import { AccountStatus, Role } from '@prisma/client';
 import { AuditRepository } from '../repositories/audit.repository';
 import { wsManager } from '../ws/manager';
+import { supabase } from '../utils/supabase';
 
 export class AccountService {
   public static async createStudentSignup(data: {
@@ -36,7 +36,26 @@ export class AccountService {
       isMatch = ocrResult.isMatch;
     }
 
-    const passwordHash = await hashPassword(data.password);
+    // Register user in Supabase Auth if configured
+    if (supabase) {
+      const { data: authData, error } = await supabase.auth.signUp({
+        email: data.email,
+        password: data.password,
+        options: {
+          data: {
+            name: data.name,
+            roll_number: data.rollNumber,
+            department: data.department,
+            role: 'student',
+            account_status: 'pending_review',
+          },
+        },
+      });
+
+      if (error) {
+        throw { statusCode: 400, message: error.message };
+      }
+    }
 
     const user = await UserRepository.create({
       name: data.name,
@@ -44,7 +63,7 @@ export class AccountService {
       rollNumber: data.rollNumber,
       department: data.department,
       role: Role.student,
-      passwordHash,
+      passwordHash: 'SUPABASE_MANAGED_AUTH',
       idCardImageUrl: imageUrl,
       idOcrExtractedName: extractedName,
       idNameMatch: isMatch,

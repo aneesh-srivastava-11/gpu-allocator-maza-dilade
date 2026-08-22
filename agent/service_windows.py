@@ -35,8 +35,9 @@ try:
             self.main()
 
         def main(self):
-            from core import AgentDaemon
-            daemon = AgentDaemon()
+            from core import AgentDaemon, parse_args
+            args = parse_args()
+            daemon = AgentDaemon(server_url=args.server_url, hardware_id=args.hardware_id, token=args.token)
             daemon.run_loop()
 
     if __name__ == '__main__':
@@ -50,6 +51,8 @@ try:
 except ImportError:
     # Fallback execution if pywin32 is not pre-installed
     if __name__ == '__main__':
-        from core import AgentDaemon
-        daemon = AgentDaemon()
+        from core import AgentDaemon, parse_args
+        args = parse_args()
+        daemon = AgentDaemon(server_url=args.server_url, hardware_id=args.hardware_id, token=args.token)
         daemon.run_loop()
+
